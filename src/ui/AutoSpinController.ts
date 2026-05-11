@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { enableContainerInput } from './containerInput';
+import { enableContainerInput, makeButton } from './containerInput';
+import { audio } from '../systems/AudioManager';
 
 interface AutoSpinOptions {
   spin: () => void;
@@ -59,13 +60,18 @@ export class AutoSpinController {
 
     c.setSize(w, h);
     enableContainerInput(c, new Phaser.Geom.Rectangle(-w / 2, -h / 2, w, h), Phaser.Geom.Rectangle.Contains);
-    c.on('pointerover', () =>
-      scene.tweens.add({ targets: c, scale: 1.06, duration: 100, ease: 'Sine.Out' }),
-    );
-    c.on('pointerout', () =>
-      scene.tweens.add({ targets: c, scale: 1, duration: 100, ease: 'Sine.Out' }),
-    );
-    c.on('pointerdown', () => this.handleClick());
+    c.on('pointerover', () => {
+      scene.input.setDefaultCursor('pointer');
+      scene.tweens.add({ targets: c, scale: 1.06, duration: 100, ease: 'Sine.Out' });
+    });
+    c.on('pointerout', () => {
+      scene.input.setDefaultCursor('default');
+      scene.tweens.add({ targets: c, scale: 1, duration: 100, ease: 'Sine.Out' });
+    });
+    c.on('pointerdown', () => {
+      audio.play('click');
+      this.handleClick();
+    });
 
     this.button = c;
   }
@@ -97,7 +103,18 @@ export class AutoSpinController {
     for (let i = 0; i < items.length; i++) {
       const val = items[i];
       const y = startY + i * (itemH + gap) + itemH / 2;
-      const c = this.scene.add.container(0, y);
+      const c = makeButton(this.scene, 0, y, {
+        shape: 'rect',
+        w: itemW,
+        h: itemH,
+        hoverScale: 1.06,
+        pressScale: 0.94,
+        onClick: () => {
+          audio.play('click');
+          this.closeMenu();
+          this.start(val);
+        },
+      });
       const g = this.scene.add.graphics();
       g.fillStyle(0x0a0a18, 1);
       g.fillRoundedRect(-itemW / 2, -itemH / 2, itemW, itemH, 6);
@@ -113,18 +130,6 @@ export class AutoSpinController {
         })
         .setOrigin(0.5);
       c.add(t);
-      c.setSize(itemW, itemH);
-      c.setInteractive(new Phaser.Geom.Rectangle(-itemW / 2, -itemH / 2, itemW, itemH), Phaser.Geom.Rectangle.Contains);
-      c.on('pointerover', () =>
-        this.scene.tweens.add({ targets: c, scale: 1.06, duration: 80 }),
-      );
-      c.on('pointerout', () =>
-        this.scene.tweens.add({ targets: c, scale: 1, duration: 80 }),
-      );
-      c.on('pointerdown', () => {
-        this.closeMenu();
-        this.start(val);
-      });
       container.add(c);
     }
     container.setAlpha(0);

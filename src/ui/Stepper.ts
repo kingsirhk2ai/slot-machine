@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { makeButton } from './containerInput';
+import { audio } from '../systems/AudioManager';
 
 interface StepperOptions {
   label: string;
@@ -78,15 +80,15 @@ export class Stepper extends Phaser.GameObjects.Container {
     this.add(scan);
 
     // Buttons.
-    this.minusBtn = this.makeButton(scene, -w / 2 - 18, 0, '−', () => this.step(-1));
-    this.plusBtn = this.makeButton(scene, w / 2 + 18, 0, '+', () => this.step(1));
+    this.minusBtn = this.makeStepperButton(scene, -w / 2 - 18, 0, '−', () => this.step(-1));
+    this.plusBtn = this.makeStepperButton(scene, w / 2 + 18, 0, '+', () => this.step(1));
     this.add(this.minusBtn);
     this.add(this.plusBtn);
 
     scene.add.existing(this);
   }
 
-  private makeButton(
+  private makeStepperButton(
     scene: Phaser.Scene,
     bx: number,
     by: number,
@@ -94,7 +96,17 @@ export class Stepper extends Phaser.GameObjects.Container {
     onClick: () => void,
   ): Phaser.GameObjects.Container {
     const r = 16;
-    const c = scene.add.container(bx, by);
+    const c = makeButton(scene, bx, by, {
+      shape: 'circle',
+      radius: r,
+      isDisabled: () => this.disabled,
+      hoverScale: 1.12,
+      pressScale: 0.9,
+      onClick: () => {
+        audio.play('click');
+        onClick();
+      },
+    });
     const g = scene.add.graphics();
     g.fillStyle(0x1a1a2e, 1);
     g.fillCircle(0, 0, r);
@@ -110,19 +122,6 @@ export class Stepper extends Phaser.GameObjects.Container {
       })
       .setOrigin(0.5);
     c.add(t);
-    c.setSize(r * 2, r * 2);
-    c.setInteractive(new Phaser.Geom.Circle(0, 0, r), Phaser.Geom.Circle.Contains);
-    c.on('pointerover', () => {
-      if (!this.disabled) scene.tweens.add({ targets: c, scale: 1.12, duration: 100, ease: 'Sine.Out' });
-    });
-    c.on('pointerout', () => {
-      scene.tweens.add({ targets: c, scale: 1, duration: 100, ease: 'Sine.Out' });
-    });
-    c.on('pointerdown', () => {
-      if (this.disabled) return;
-      scene.tweens.add({ targets: c, scale: 0.9, duration: 60, yoyo: true, ease: 'Sine.Out' });
-      onClick();
-    });
     return c;
   }
 

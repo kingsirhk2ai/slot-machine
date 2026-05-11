@@ -18,6 +18,8 @@ import { AutoSpinController } from '../ui/AutoSpinController';
 import { evaluate, totalWin, type WinLine } from '../systems/PaylineEvaluator';
 import { Balance } from '../systems/Balance';
 import { WinFx } from '../ui/WinFx';
+import { audio } from '../systems/AudioManager';
+import { MuteButton } from '../ui/MuteButton';
 
 const NUM_REELS = 5;
 const VISIBLE_ROWS = 3;
@@ -52,6 +54,9 @@ export class MainScene extends Phaser.Scene {
 
   create(): void {
     this.balance = Balance.getBalance();
+
+    audio.attach(this);
+    audio.startBgm();
 
     new Background(this);
     createTitle(this);
@@ -122,6 +127,9 @@ export class MainScene extends Phaser.Scene {
     this.hud = new Hud(this, GAME_HEIGHT - 80);
     this.refreshHud(true);
 
+    // Mute toggle — top-right corner of the canvas.
+    new MuteButton(this, GAME_WIDTH - 38, 38);
+
     const creditCenter = this.hud.panelCenter('CREDIT') ?? { x: GAME_WIDTH / 2, y: GAME_HEIGHT - 60 };
     this.winFx = new WinFx(
       this,
@@ -180,6 +188,9 @@ export class MainScene extends Phaser.Scene {
     this.spinButton.setDisabled(true);
     this.paylinePanel.clearWins();
 
+    audio.play('spin-start');
+    audio.play('reel-loop', { loop: true, volume: 0.7 });
+
     // Deduct bet.
     Balance.deduct(totalBet);
     const beforeBalance = this.balance;
@@ -197,6 +208,13 @@ export class MainScene extends Phaser.Scene {
       const stop = reel.strip.pickStopIndex(rng);
       const duration = 1200 + i * 250;
       reel.spinTo(stop, duration, () => {
+        const isFinal = i === this.reels.length - 1;
+        if (isFinal) {
+          audio.stop('reel-loop');
+          audio.play('reel-stop-final');
+        } else {
+          audio.play('reel-stop');
+        }
         this.playReelStopFx(i);
         finished++;
         if (finished === this.reels.length) {
@@ -224,12 +242,17 @@ export class MainScene extends Phaser.Scene {
       this.lastWin = winSum;
 
       const isBig = winSum >= totalBet * 10;
+      const isMedium = !isBig && (winSum >= totalBet * 3 || wins.length >= 3);
       const countDuration = isBig ? 1400 : 1000;
       this.hud.countTo('WIN', winSum, countDuration);
       this.hud.countTo('CREDIT', this.balance, countDuration);
       this.hud.pulseValue('WIN');
       this.hud.pulsePanel('CREDIT');
       this.hud.pulsePanel('WIN');
+
+      if (isBig) audio.play('win-big');
+      else if (isMedium) audio.play('win-medium');
+      else audio.play('win-small');
 
       this.winFx.centerBadge(winSum);
       this.winFx.coinBurst(isBig ? 40 : 28);
@@ -258,6 +281,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private indicateInsufficient(): void {
+    audio.play('error');
     this.hud.flashError('CREDIT');
     const t = this.add
       .text(GAME_WIDTH / 2, this.blockY + this.blockH + 30, 'INSUFFICIENT CREDITS', {

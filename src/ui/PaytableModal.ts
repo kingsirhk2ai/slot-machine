@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { PAYOUTS, PAYOUT_DISPLAY_ORDER } from '../data/payouts';
 import { getSymbol } from '../data/symbols';
-import { enableContainerInput } from './containerInput';
+import { enableContainerInput, makeButton } from './containerInput';
+import { audio } from '../systems/AudioManager';
 
 const MODAL_W = 720;
 const MODAL_H = 540;
@@ -45,13 +46,18 @@ export class PaytableModal {
 
     c.setSize(r * 2, r * 2);
     enableContainerInput(c, new Phaser.Geom.Circle(0, 0, r), Phaser.Geom.Circle.Contains);
-    c.on('pointerover', () =>
-      this.scene.tweens.add({ targets: c, scale: 1.1, duration: 120, ease: 'Sine.Out' }),
-    );
-    c.on('pointerout', () =>
-      this.scene.tweens.add({ targets: c, scale: 1, duration: 120, ease: 'Sine.Out' }),
-    );
-    c.on('pointerdown', () => this.toggle());
+    c.on('pointerover', () => {
+      this.scene.input.setDefaultCursor('pointer');
+      this.scene.tweens.add({ targets: c, scale: 1.1, duration: 120, ease: 'Sine.Out' });
+    });
+    c.on('pointerout', () => {
+      this.scene.input.setDefaultCursor('default');
+      this.scene.tweens.add({ targets: c, scale: 1, duration: 120, ease: 'Sine.Out' });
+    });
+    c.on('pointerdown', () => {
+      audio.play('click');
+      this.toggle();
+    });
     return c;
   }
 
@@ -76,7 +82,10 @@ export class PaytableModal {
       new Phaser.Geom.Rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT),
       Phaser.Geom.Rectangle.Contains,
     );
-    backdrop.on('pointerdown', () => this.close());
+    backdrop.on('pointerdown', () => {
+      audio.play('click');
+      this.close();
+    });
     container.add(backdrop);
 
     // Panel.
@@ -212,7 +221,16 @@ export class PaytableModal {
 
     // Close (X) button.
     const closeR = 16;
-    const closeC = this.scene.add.container(mx + MODAL_W - 26, my + 26);
+    const closeC = makeButton(this.scene, mx + MODAL_W - 26, my + 26, {
+      shape: 'circle',
+      radius: closeR,
+      hoverScale: 1.12,
+      pressScale: 0.9,
+      onClick: () => {
+        audio.play('click');
+        this.close();
+      },
+    });
     const closeG = this.scene.add.graphics();
     closeG.fillStyle(0x1a1a2e, 1);
     closeG.fillCircle(0, 0, closeR);
@@ -227,17 +245,6 @@ export class PaytableModal {
       })
       .setOrigin(0.5);
     closeC.add(closeT);
-    closeC.setSize(closeR * 2, closeR * 2);
-    closeC.setInteractive(new Phaser.Geom.Circle(0, 0, closeR), Phaser.Geom.Circle.Contains);
-    closeC.on('pointerdown', (
-      _p: Phaser.Input.Pointer,
-      _lx: number,
-      _ly: number,
-      event: Phaser.Types.Input.EventData,
-    ) => {
-      event.stopPropagation();
-      this.close();
-    });
     container.add(closeC);
 
     // Fade-in.

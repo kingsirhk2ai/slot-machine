@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { SYMBOLS } from '../data/symbols';
+import { audio } from '../systems/AudioManager';
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -34,6 +35,8 @@ export class PreloadScene extends Phaser.Scene {
     this.load.on('loaderror', (file: Phaser.Loader.File) => {
       console.warn(`[preload] failed to load ${file.key} (${file.src})`);
     });
+
+    audio.queuePreload(this);
   }
 
   create(): void {

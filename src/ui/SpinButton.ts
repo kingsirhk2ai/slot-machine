@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SPARKLE_TEXTURE } from './Background';
 import { enableContainerInput } from './containerInput';
+import { audio } from '../systems/AudioManager';
 
 const RADIUS = 60;
 
@@ -122,6 +123,7 @@ export class SpinButton extends Phaser.GameObjects.Container {
     });
     this.on('pointerdown', () => {
       if (this.disabled) return;
+      audio.play('click');
       this.scene.tweens.add({
         targets: this.bodyGroup,
         scaleX: 0.9,

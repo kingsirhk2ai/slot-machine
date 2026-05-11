@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { WinLine } from '../systems/PaylineEvaluator';
+import { audio } from '../systems/AudioManager';
 
 const COIN_TEXTURE = 'fx-coin';
 const CONFETTI_TEXTURE = 'fx-confetti';
@@ -190,6 +191,7 @@ export class WinFx {
           coin.y = iy;
         },
         onComplete: () => {
+          audio.playCoin();
           this.scene.tweens.add({
             targets: coin,
             alpha: 0,
