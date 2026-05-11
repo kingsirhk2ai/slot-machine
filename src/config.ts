@@ -8,6 +8,7 @@ export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 
 export const DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 3));
+export const DESIGN_DPR = window.devicePixelRatio || 1;
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
