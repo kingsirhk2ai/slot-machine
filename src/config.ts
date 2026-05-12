@@ -4,6 +4,7 @@ import { PreloadScene } from './scenes/PreloadScene';
 import { MainScene } from './scenes/MainScene';
 import { PaytableScene } from './scenes/PaytableScene';
 
+// Initial design size; the canvas is RESIZE-mode and fills the viewport at all times.
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 
@@ -12,12 +13,12 @@ export const DESIGN_DPR = window.devicePixelRatio || 1;
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: GAME_WIDTH,
-  height: GAME_HEIGHT,
+  width: window.innerWidth,
+  height: window.innerHeight,
   parent: document.body,
-  backgroundColor: 0x1a1a2e,
+  backgroundColor: 0x050410,
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   render: {

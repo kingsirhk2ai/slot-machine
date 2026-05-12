@@ -3,8 +3,6 @@ import { SPARKLE_TEXTURE } from './Background';
 import { enableContainerInput } from './containerInput';
 import { audio } from '../systems/AudioManager';
 
-const RADIUS = 60;
-
 export class SpinButton extends Phaser.GameObjects.Container {
   private readonly glow: Phaser.GameObjects.Graphics;
   private readonly label: Phaser.GameObjects.Text;
@@ -13,10 +11,13 @@ export class SpinButton extends Phaser.GameObjects.Container {
   private breathTween?: Phaser.Tweens.Tween;
   private disabled = false;
   private readonly onClick: () => void;
+  private readonly RADIUS: number;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, onClick: () => void) {
+  constructor(scene: Phaser.Scene, x: number, y: number, onClick: () => void, radius: number = 60) {
     super(scene, x, y);
     this.onClick = onClick;
+    this.RADIUS = radius;
+    const RADIUS = radius;
 
     // Pulsing outer glow ring.
     this.glow = scene.add.graphics();
@@ -78,14 +79,15 @@ export class SpinButton extends Phaser.GameObjects.Container {
     this.add(this.bodyGroup);
 
     // SPIN text.
+    const labelPx = Math.max(20, Math.round(RADIUS * 0.55));
     this.label = scene.add
       .text(0, 0, 'SPIN', {
         fontFamily: '"Arial Black", Arial, sans-serif',
-        fontSize: '34px',
+        fontSize: `${labelPx}px`,
         fontStyle: 'bold',
         color: '#ffffff',
         stroke: '#000000',
-        strokeThickness: 4,
+        strokeThickness: Math.max(3, Math.round(labelPx * 0.12)),
       })
       .setOrigin(0.5);
     this.label.setShadow(0, 2, '#000000', 4, false, true);
@@ -182,7 +184,7 @@ export class SpinButton extends Phaser.GameObjects.Container {
   private flash(): void {
     const f = this.scene.add.graphics();
     f.fillStyle(0xffffff, 0.7);
-    f.fillCircle(0, 0, RADIUS);
+    f.fillCircle(0, 0, this.RADIUS);
     f.setBlendMode(Phaser.BlendModes.ADD);
     this.add(f);
     this.scene.tweens.add({

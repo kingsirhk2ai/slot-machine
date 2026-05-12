@@ -1,33 +1,35 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH } from '../config';
 import { SPARKLE_TEXTURE } from './Background';
 
-export function createTitle(scene: Phaser.Scene): Phaser.GameObjects.Text {
+export function createTitle(
+  scene: Phaser.Scene,
+  centerX: number,
+  centerY: number,
+  fontSize: number,
+): Phaser.GameObjects.Text {
   const title = scene.add
-    .text(GAME_WIDTH / 2, 56, '🎰  LUCKY  SLOT  🎰', {
+    .text(centerX, centerY, '🎰  LUCKY  SLOT  🎰', {
       fontFamily: '"Impact", "Arial Black", "Helvetica Neue", sans-serif',
-      fontSize: '56px',
+      fontSize: `${fontSize}px`,
       fontStyle: 'bold',
       color: '#ffd700',
       stroke: '#1a0a00',
-      strokeThickness: 6,
+      strokeThickness: Math.max(3, Math.round(fontSize * 0.11)),
     })
     .setOrigin(0.5)
     .setDepth(60);
   title.setShadow(0, 4, '#000000', 10, false, true);
 
-  // Vertical gradient fill (light gold top → amber bottom).
   const gradient = title.context.createLinearGradient(0, 0, 0, title.height);
   gradient.addColorStop(0, '#fff4b3');
   gradient.addColorStop(0.5, '#ffd700');
   gradient.addColorStop(1, '#b8860b');
   title.setFill(gradient);
 
-  // Soft outer glow: a slightly larger faded copy underneath.
   const glow = scene.add
-    .text(GAME_WIDTH / 2, 56, '🎰  LUCKY  SLOT  🎰', {
+    .text(centerX, centerY, '🎰  LUCKY  SLOT  🎰', {
       fontFamily: '"Impact", "Arial Black", "Helvetica Neue", sans-serif',
-      fontSize: '56px',
+      fontSize: `${fontSize}px`,
       fontStyle: 'bold',
       color: '#ffd700',
     })
@@ -37,7 +39,6 @@ export function createTitle(scene: Phaser.Scene): Phaser.GameObjects.Text {
     .setDepth(59);
   glow.setScale(1.03);
 
-  // Subtle vertical bob.
   const baseY = title.y;
   scene.tweens.add({
     targets: [title, glow],
@@ -48,22 +49,12 @@ export function createTitle(scene: Phaser.Scene): Phaser.GameObjects.Text {
     ease: 'Sine.InOut',
   });
 
-  // Sliding metallic shine across the title — mask-clipped diagonal gradient.
   const titleW = title.width;
   const titleH = title.height;
   const titleLeft = title.x - titleW / 2;
   const titleTop = title.y - titleH / 2;
   const shineBand = scene.add.graphics();
-  shineBand.fillGradientStyle(
-    0xffffff,
-    0xffffff,
-    0xffffff,
-    0xffffff,
-    0,
-    0.55,
-    0,
-    0,
-  );
+  shineBand.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0, 0.55, 0, 0);
   shineBand.fillRect(0, 0, 90, titleH + 6);
   shineBand.setBlendMode(Phaser.BlendModes.ADD);
   shineBand.setDepth(61);
@@ -82,12 +73,17 @@ export function createTitle(scene: Phaser.Scene): Phaser.GameObjects.Text {
     ease: 'Sine.InOut',
   });
 
-  // Small gold glints around the title — sparkle pops at intervals.
   if (scene.textures.exists(SPARKLE_TEXTURE)) {
-    const glintXs = [titleLeft + 20, titleLeft + titleW * 0.3, title.x, titleLeft + titleW * 0.7, titleLeft + titleW - 20];
+    const glintXs = [
+      titleLeft + 20,
+      titleLeft + titleW * 0.3,
+      title.x,
+      titleLeft + titleW * 0.7,
+      titleLeft + titleW - 20,
+    ];
     for (let i = 0; i < glintXs.length; i++) {
       const gx = glintXs[i];
-      const gy = title.y + (i % 2 === 0 ? -22 : 22);
+      const gy = title.y + (i % 2 === 0 ? -titleH * 0.4 : titleH * 0.4);
       const glint = scene.add.image(gx, gy, SPARKLE_TEXTURE);
       glint.setBlendMode(Phaser.BlendModes.ADD);
       glint.setTint(0xffe98a);

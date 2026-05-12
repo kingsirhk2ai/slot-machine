@@ -1,12 +1,9 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { PAYOUTS, PAYOUT_DISPLAY_ORDER } from '../data/payouts';
 import { getSymbol } from '../data/symbols';
 import { enableContainerInput, makeButton } from './containerInput';
 import { audio } from '../systems/AudioManager';
 
-const MODAL_W = 720;
-const MODAL_H = 540;
 const DEPTH = 400;
 
 /**
@@ -70,6 +67,11 @@ export class PaytableModal {
     if (this.isOpen) return;
     this.isOpen = true;
 
+    const W = this.scene.scale.width;
+    const H = this.scene.scale.height;
+    const MODAL_W = Math.min(720, W - 24);
+    const MODAL_H = Math.min(540, H - 24);
+
     const container = this.scene.add.container(0, 0);
     container.setDepth(DEPTH);
     this.container = container;
@@ -77,9 +79,9 @@ export class PaytableModal {
     // Backdrop — click outside to close.
     const backdrop = this.scene.add.graphics();
     backdrop.fillStyle(0x000000, 0.7);
-    backdrop.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    backdrop.fillRect(0, 0, W, H);
     backdrop.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT),
+      new Phaser.Geom.Rectangle(0, 0, W, H),
       Phaser.Geom.Rectangle.Contains,
     );
     backdrop.on('pointerdown', () => {
@@ -89,8 +91,9 @@ export class PaytableModal {
     container.add(backdrop);
 
     // Panel.
-    const mx = (GAME_WIDTH - MODAL_W) / 2;
-    const my = (GAME_HEIGHT - MODAL_H) / 2;
+    const mx = (W - MODAL_W) / 2;
+    const my = (H - MODAL_H) / 2;
+    const cxCenter = W / 2;
     const panel = this.scene.add.graphics();
     panel.fillGradientStyle(0x141430, 0x141430, 0x07071a, 0x07071a, 1);
     panel.fillRoundedRect(mx, my, MODAL_W, MODAL_H, 14);
@@ -114,7 +117,7 @@ export class PaytableModal {
 
     // Title.
     const title = this.scene.add
-      .text(GAME_WIDTH / 2, my + 22, 'PAYTABLE', {
+      .text(cxCenter, my + 22, 'PAYTABLE', {
         fontFamily: '"Impact", "Arial Black", sans-serif',
         fontSize: '30px',
         fontStyle: 'bold',
@@ -124,8 +127,15 @@ export class PaytableModal {
     title.setShadow(0, 2, '#000000', 4, false, true);
     container.add(title);
 
-    // Header row.
-    const colXs = [mx + 80, mx + 260, mx + 380, mx + 500, mx + 620];
+    // Header row — scale column x positions to actual modal width.
+    const scaleK = MODAL_W / 720;
+    const colXs = [
+      mx + 80 * scaleK,
+      mx + 260 * scaleK,
+      mx + 380 * scaleK,
+      mx + 500 * scaleK,
+      mx + 620 * scaleK,
+    ];
     const headers = ['SYMBOL', 'x3', 'x4', 'x5'];
     const headerY = my + 78;
     for (let i = 0; i < headers.length; i++) {
@@ -210,7 +220,7 @@ export class PaytableModal {
 
     // Footer hint.
     const hint = this.scene.add
-      .text(GAME_WIDTH / 2, my + MODAL_H - 28, 'Multipliers × per-line bet. Match left-to-right, 3+ in a row.', {
+      .text(cxCenter, my + MODAL_H - 28, 'Multipliers × per-line bet. Match left-to-right, 3+ in a row.', {
         fontFamily: '"Arial", sans-serif',
         fontSize: '12px',
         color: '#bcbcd6',

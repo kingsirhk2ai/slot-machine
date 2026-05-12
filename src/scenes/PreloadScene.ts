@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { SYMBOLS } from '../data/symbols';
 import { audio } from '../systems/AudioManager';
 
@@ -9,10 +8,12 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
-    const barW = 400;
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const barW = Math.min(400, W * 0.8);
     const barH = 24;
-    const barX = (GAME_WIDTH - barW) / 2;
-    const barY = GAME_HEIGHT / 2;
+    const barX = (W - barW) / 2;
+    const barY = H / 2;
 
     const bg = this.add.graphics();
     bg.fillStyle(0x333333, 1);
