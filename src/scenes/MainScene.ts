@@ -36,7 +36,6 @@ const DEFAULT_LINES = 20;
 interface LayoutDims {
   w: number;
   h: number;
-  portrait: boolean;
   symbolSize: number;
   cellH: number;
   blockX: number;
@@ -57,7 +56,6 @@ interface LayoutDims {
   stepperH: number;
   stepperY: number;
   spinY: number;
-  // Landscape-only: unified bottom control deck.
   deckTop: number;
   deckH: number;
 }
@@ -135,62 +133,7 @@ export class MainScene extends Phaser.Scene {
   private computeLayout(): LayoutDims {
     const w = this.scale.width;
     const h = this.scale.height;
-    const portrait = h > w;
     const hudPanelCount = 3;
-
-    if (portrait) {
-      // Tight chrome — reels dominate. Title becomes a slim header strip.
-      const titleSize = Math.max(16, Math.min(22, Math.floor(w / 18)));
-      const titleBarH = titleSize + TITLE_BAR_PAD_V * 2;
-      const titleBarW = Math.min(w - 16, titleSize * 17);
-      const titleTop = 4;
-      const titleCenterY = titleTop + titleBarH / 2;
-
-      // HUD — slim 3-panel bar.
-      const hudPanelGap = 5;
-      const hudPanelW = Math.min(120, (w - 10 - hudPanelGap * (hudPanelCount - 1)) / hudPanelCount);
-      const hudPanelH = Math.max(34, Math.min(40, hudPanelW * 0.32));
-      const hudTop = titleTop + titleBarH + 4;
-      const hudCenterY = hudTop + hudPanelH / 2;
-      const hudBottom = hudTop + hudPanelH;
-
-      // Bottom band — minimal SPIN + stepper.
-      const spinRadius = Math.max(36, Math.min(46, w * 0.115));
-      const stepperH = 34;
-      const stepperW = Math.min(135, (w - 40) / 2);
-      const bottomMargin = 10;
-      const stepperToSpinGap = 6;
-      const spinY = h - bottomMargin - spinRadius;
-      const stepperY = spinY - spinRadius - stepperToSpinGap - stepperH / 2;
-      const stepperTop = stepperY - stepperH / 2;
-
-      // Reel area — fills everything between HUD and stepper.
-      const reelTop = hudBottom + 4;
-      const reelBottom = stepperTop - 4;
-      const reelArea = Math.max(180, reelBottom - reelTop);
-
-      const symbolSize = Math.floor(Math.min(
-        160,
-        Math.max(48, (w - 4 - (NUM_REELS - 1) * REEL_GAP) / NUM_REELS),
-      ));
-      const cellH = Math.floor(reelArea / VISIBLE_ROWS);
-
-      const blockW = NUM_REELS * symbolSize + (NUM_REELS - 1) * REEL_GAP;
-      const blockH = VISIBLE_ROWS * cellH;
-      const blockX = Math.floor((w - blockW) / 2);
-      const blockY = Math.floor(reelTop);
-
-      return {
-        w, h, portrait: true, symbolSize, cellH,
-        blockX, blockY, blockW, blockH,
-        spinRadius,
-        titleSize, titleBarH, titleBarW, titleCenterY,
-        hudPanelW, hudPanelH, hudPanelGap, hudCenterX: w / 2, hudCenterY,
-        stepperW, stepperH, stepperY,
-        spinY,
-        deckTop: 0, deckH: 0,
-      };
-    }
 
     // Landscape — Vegas cabinet layout (Lightning Link / Cash Frenzy):
     //   • slim branding strip on top (logo only)
@@ -248,7 +191,7 @@ export class MainScene extends Phaser.Scene {
     const blockY = Math.floor(reelTop + (reelAreaH - blockH) / 2);
 
     return {
-      w, h, portrait: false, symbolSize, cellH,
+      w, h, symbolSize, cellH,
       blockX, blockY, blockW, blockH,
       spinRadius,
       titleSize, titleBarH, titleBarW, titleCenterY,
@@ -269,25 +212,17 @@ export class MainScene extends Phaser.Scene {
 
     new Background(this, L.w, L.h);
 
-    // Title / branding strip on top in both orientations.
     if (L.titleSize > 0) {
       createTitle(this, L.w / 2, L.titleCenterY, L.titleSize, { width: L.titleBarW });
     }
 
-    // Landscape: draw the unified bottom control deck before placing HUD/buttons.
-    if (!L.portrait) {
-      this.drawBottomDeck(L);
-    }
+    this.drawBottomDeck(L);
 
-    // HUD readouts — portrait: top strip centered. Landscape: inset into
-    // bottom deck, anchored on the left.
-    const hudCfg = L.portrait
-      ? {}
-      : {
-          labelFontPx: Math.max(10, Math.min(13, Math.round(L.hudPanelH * 0.19))),
-          valueFontPx: Math.max(18, Math.min(28, Math.round(L.hudPanelH * 0.42))),
-          style: 'led' as const,
-        };
+    const hudCfg = {
+      labelFontPx: Math.max(10, Math.min(13, Math.round(L.hudPanelH * 0.19))),
+      valueFontPx: Math.max(18, Math.min(28, Math.round(L.hudPanelH * 0.42))),
+      style: 'led' as const,
+    };
     this.hud = new Hud(this, {
       centerX: L.hudCenterX,
       topY: L.hudCenterY - L.hudPanelH / 2,
@@ -320,17 +255,12 @@ export class MainScene extends Phaser.Scene {
       [...PAYLINES],
     );
 
-    // Controls area beneath reels.
-    if (L.portrait) {
-      this.buildPortraitControls(L);
-    } else {
-      this.buildLandscapeControls(L);
-    }
+    this.buildLandscapeControls(L);
 
     this.refreshHud(true);
 
     // Settings (gear) — top-right corner. Houses mute, volume sliders, quick-spin.
-    const settingsOffset = L.portrait ? 28 : 32;
+    const settingsOffset = 32;
     new SettingsModal(this, L.w - settingsOffset, settingsOffset);
 
     // Spin history — top-LEFT pill mirroring the gear placement.
@@ -379,45 +309,6 @@ export class MainScene extends Phaser.Scene {
     );
 
     this.paylinePanel.showPreview(this.activeLines);
-  }
-
-  private buildPortraitControls(L: LayoutDims): void {
-    const betX = L.w / 2 - L.stepperW / 2 - 26;
-    const linesX = L.w / 2 + L.stepperW / 2 + 26;
-
-    const betStepper = new Stepper(this, betX, L.stepperY, {
-      label: 'BET',
-      values: BET_OPTIONS,
-      initial: this.betPerLine,
-      width: L.stepperW,
-      height: L.stepperH,
-      withMaxButton: true,
-      onChange: (v) => this.setBet(v),
-    });
-    betStepper.setDepth(150);
-
-    const linesStepper = new Stepper(this, linesX, L.stepperY, {
-      label: 'LINES',
-      values: LINE_OPTIONS,
-      initial: this.activeLines,
-      width: L.stepperW,
-      height: L.stepperH,
-      onChange: (v) => this.setLines(v),
-    });
-    linesStepper.setDepth(150);
-
-    // SPIN bottom-center, big.
-    this.spinButton = new SpinButton(this, L.w / 2, L.spinY, () => this.handleSpin(), L.spinRadius);
-    this.spinButton.setDepth(150);
-
-    // AUTO and PAYTABLE flanking SPIN.
-    const auxOffset = L.spinRadius + Math.max(46, L.w * 0.14);
-    this.autoSpin = new AutoSpinController(this, L.w / 2 - auxOffset, L.spinY, {
-      spin: () => this.handleSpin(),
-      isSpinning: () => this.spinning,
-      canSpin: () => this.balance >= this.betPerLine * this.activeLines,
-    });
-    new PaytableModal(this, L.w / 2 + auxOffset, L.spinY);
   }
 
   private drawBottomDeck(L: LayoutDims): void {

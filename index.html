@@ -23,9 +23,63 @@
         width: 100% !important;
         height: 100% !important;
       }
+      #rotate-prompt {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(ellipse at center, #14143a 0%, #050410 70%);
+        color: #ffd700;
+        font-family: "Impact", "Arial Black", sans-serif;
+        text-align: center;
+        padding: 24px;
+      }
+      #rotate-prompt .icon {
+        font-size: 72px;
+        line-height: 1;
+        margin-bottom: 18px;
+        animation: tilt 1.6s ease-in-out infinite;
+        transform-origin: 50% 60%;
+      }
+      #rotate-prompt h1 {
+        font-size: 26px;
+        letter-spacing: 1.5px;
+        margin-bottom: 8px;
+        text-shadow: 0 0 14px rgba(255, 215, 0, 0.55);
+      }
+      #rotate-prompt p {
+        font-family: "Arial", sans-serif;
+        font-size: 14px;
+        color: #bcbcd6;
+        max-width: 280px;
+        line-height: 1.5;
+      }
+      @keyframes tilt {
+        0%, 100% { transform: rotate(-12deg); }
+        50%      { transform: rotate(78deg); }
+      }
+      @media (orientation: portrait) {
+        #rotate-prompt { display: flex; }
+        canvas { visibility: hidden; }
+      }
     </style>
   </head>
   <body>
+    <div id="rotate-prompt">
+      <div>
+        <div class="icon">📱</div>
+        <h1>ROTATE YOUR DEVICE</h1>
+        <p>This game is designed for landscape. Turn your phone sideways to play.</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+      // Best-effort orientation lock — silently fails on browsers that don't allow it.
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(() => {});
+      }
+    </script>
   </body>
 </html>
