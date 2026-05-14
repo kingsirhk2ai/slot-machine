@@ -18,7 +18,9 @@ import { evaluate, totalWin, countScatters, freeSpinsAwarded, type WinLine } fro
 import { Balance } from '../systems/Balance';
 import { WinFx } from '../ui/WinFx';
 import { audio } from '../systems/AudioManager';
-import { MuteButton } from '../ui/MuteButton';
+import { settings } from '../systems/Settings';
+import { SettingsModal } from '../ui/SettingsModal';
+import { SpinHistory, type SpinTier } from '../ui/SpinHistory';
 
 const NUM_REELS = 5;
 const VISIBLE_ROWS = 3;
@@ -70,6 +72,7 @@ export class MainScene extends Phaser.Scene {
   private paylinePanel!: PaylinePanel;
   private autoSpin!: AutoSpinController;
   private winFx!: WinFx;
+  private spinHistory?: SpinHistory;
 
   private betPerLine = DEFAULT_BET;
   private activeLines = DEFAULT_LINES;
@@ -311,9 +314,12 @@ export class MainScene extends Phaser.Scene {
 
     this.refreshHud(true);
 
-    // Mute toggle — top-right corner.
-    const muteOffset = L.portrait ? 28 : 38;
-    new MuteButton(this, L.w - muteOffset, muteOffset);
+    // Settings (gear) — top-right corner. Houses mute, volume sliders, quick-spin.
+    const settingsOffset = L.portrait ? 28 : 32;
+    new SettingsModal(this, L.w - settingsOffset, settingsOffset);
+
+    // Spin history — top-LEFT pill mirroring the gear placement.
+    this.spinHistory = new SpinHistory(this, settingsOffset + 50, settingsOffset);
 
     const creditCenter = this.hud.panelCenter('CREDIT') ?? { x: L.w / 2, y: L.h - 60 };
     this.winFx = new WinFx(
@@ -550,11 +556,14 @@ export class MainScene extends Phaser.Scene {
     this.lastWin = 0;
     this.hud.setValue('WIN', 0);
 
+    const quick = settings.isQuickSpin();
+    const baseDur = quick ? 420 : 1200;
+    const stagger = quick ? 80 : 250;
     let finished = 0;
     for (let i = 0; i < this.reels.length; i++) {
       const reel = this.reels[i];
       const stop = reel.strip.pickStopIndex(rng);
-      const duration = 1200 + i * 250;
+      const duration = baseDur + i * stagger;
       reel.spinTo(stop, duration, () => {
         const isFinal = i === this.reels.length - 1;
         if (isFinal) {
@@ -592,6 +601,7 @@ export class MainScene extends Phaser.Scene {
     const winSum = totalWin(wins);
 
     const totalBet = this.betPerLine * this.activeLines;
+    let tier: SpinTier = 'none';
     if (wins.length > 0) {
       this.paylinePanel.showWins(wins, (w) => this.winFx.floatLineAmount(w));
       Balance.add(winSum);
@@ -602,6 +612,7 @@ export class MainScene extends Phaser.Scene {
       const isMega = winSum >= totalBet * 25;
       const isBig = !isMega && winSum >= totalBet * 10;
       const isMedium = !isBig && !isMega && (winSum >= totalBet * 3 || wins.length >= 3);
+      tier = isMega ? 'mega' : isBig ? 'big' : isMedium ? 'medium' : 'small';
       const countDuration = isMega ? 1800 : isBig ? 1400 : 1000;
       this.hud.countTo('WIN', winSum, countDuration);
       this.hud.countTo('CREDIT', this.balance, countDuration);
@@ -628,6 +639,8 @@ export class MainScene extends Phaser.Scene {
         new CustomEvent('slot:win', { detail: { amount: winSum, lines: wins.length, isBig: isBig || isMega } }),
       );
     }
+
+    this.spinHistory?.record(tier);
 
     // Scatter / free-spin trigger.
     const scatters = countScatters(result);
