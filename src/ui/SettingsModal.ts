@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { audio } from '../systems/AudioManager';
-import { settings } from '../systems/Settings';
+import { settings, sessionStats } from '../systems/Settings';
 import { enableContainerInput, makeButton } from './containerInput';
 
 const DEPTH = 400;
@@ -74,7 +74,7 @@ export class SettingsModal {
     const W = this.scene.scale.width;
     const H = this.scene.scale.height;
     const MODAL_W = Math.min(380, W - 24);
-    const MODAL_H = Math.min(320, H - 24);
+    const MODAL_H = Math.min(420, H - 24);
 
     const container = this.scene.add.container(0, 0);
     container.setDepth(DEPTH);
@@ -135,8 +135,10 @@ export class SettingsModal {
     // Layout grid for rows.
     const rowX = mx + 26;
     const rowW = MODAL_W - 52;
-    let rowY = my + 70;
-    const ROW_GAP = 50;
+    // Tighten row spacing in shallow landscape so the stats grid still fits.
+    const compact = H < 460;
+    let rowY = my + (compact ? 60 : 70);
+    const ROW_GAP = compact ? 38 : 50;
 
     // ── Mute toggle ──
     this.addToggleRow(container, rowX, rowY, rowW, 'MUTE', () => audio.isMuted(), (v) => {
@@ -167,6 +169,10 @@ export class SettingsModal {
       () => settings.isQuickSpin(),
       (v) => settings.setQuickSpin(v),
     );
+    rowY += ROW_GAP - 8;
+
+    // ── Session stats section ──
+    this.addStatsSection(container, mx, my, MODAL_W, rowY + 14, compact);
 
     // Close (X) button.
     const closeR = 16;
@@ -212,6 +218,150 @@ export class SettingsModal {
       ease: 'Sine.In',
       onComplete: () => c.destroy(),
     });
+  }
+
+  /** "THIS SESSION" stats panel — recessed dark box with 4 stat cells in a 2×2 grid. */
+  private addStatsSection(
+    parent: Phaser.GameObjects.Container,
+    mx: number,
+    _my: number,
+    modalW: number,
+    topY: number,
+    compact: boolean,
+  ): void {
+    const padX = 18;
+    const w = modalW - padX * 2;
+    const h = compact ? 80 : 110;
+    const x = mx + padX;
+
+    const g = this.scene.add.graphics();
+    g.fillStyle(0x07071a, 0.85);
+    g.fillRoundedRect(x, topY, w, h, 8);
+    g.lineStyle(1.5, 0xffd700, 0.65);
+    g.strokeRoundedRect(x, topY, w, h, 8);
+    parent.add(g);
+
+    // Tab label, overlapping the top edge — matches the HUD/Stepper aesthetic.
+    const titleT = this.scene.add
+      .text(x + 14, topY, 'THIS SESSION', {
+        fontFamily: '"Arial Black", Arial, sans-serif',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#ffd700',
+        backgroundColor: '#141430',
+        padding: { left: 4, right: 4, top: 1, bottom: 1 },
+      } as Phaser.Types.GameObjects.Text.TextStyle)
+      .setOrigin(0, 0.5);
+    parent.add(titleT);
+
+    // 2×2 grid of stats. Cells are recomputed live from sessionStats.
+    const cellW = w / 2;
+    const cellH = (h - 14) / 2;
+    const cellPadY = 12;
+    const labelPx = compact ? 9 : 10;
+    const valuePx = compact ? 16 : 20;
+    const labelOff = compact ? 9 : 12;
+    const valueOff = compact ? 7 : 8;
+
+    const cells: { label: string; getter: () => string; color: () => string }[] = [
+      {
+        label: 'SPINS',
+        getter: () => String(sessionStats.spins),
+        color: () => '#ffe98a',
+      },
+      {
+        label: 'WAGERED',
+        getter: () => String(sessionStats.wagered),
+        color: () => '#ff8a3a',
+      },
+      {
+        label: 'WON',
+        getter: () => String(sessionStats.won),
+        color: () => '#4be84b',
+      },
+      {
+        label: 'NET',
+        getter: () => {
+          const n = sessionStats.net();
+          return (n >= 0 ? '+' : '') + String(n);
+        },
+        color: () => (sessionStats.net() >= 0 ? '#4be84b' : '#ff5566'),
+      },
+    ];
+
+    const valueTexts: Phaser.GameObjects.Text[] = [];
+    for (let i = 0; i < cells.length; i++) {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const cx = x + col * cellW + cellW / 2;
+      const cy = topY + cellPadY + row * cellH + cellH / 2;
+
+      const labelT = this.scene.add
+        .text(cx, cy - labelOff, cells[i].label, {
+          fontFamily: '"Arial Black", Arial, sans-serif',
+          fontSize: `${labelPx}px`,
+          fontStyle: 'bold',
+          color: '#bcbcd6',
+        })
+        .setOrigin(0.5);
+      parent.add(labelT);
+
+      const valT = this.scene.add
+        .text(cx, cy + valueOff, cells[i].getter(), {
+          fontFamily: '"Courier New", monospace',
+          fontSize: `${valuePx}px`,
+          fontStyle: 'bold',
+          color: cells[i].color(),
+        })
+        .setOrigin(0.5);
+      parent.add(valT);
+      valueTexts.push(valT);
+    }
+
+    // Live refresh while open — one listener tied to this modal lifecycle.
+    const unsub = sessionStats.onChange(() => {
+      for (let i = 0; i < cells.length; i++) {
+        const t = valueTexts[i];
+        if (!t || !t.scene) continue;
+        t.setText(cells[i].getter());
+        t.setColor(cells[i].color());
+      }
+    });
+    // Detach when the parent modal container is destroyed.
+    parent.once(Phaser.GameObjects.Events.DESTROY, () => unsub());
+
+    // Reset button — small, bottom-right of the box.
+    const resetW = 60;
+    const resetH = 22;
+    const resetX = x + w - resetW / 2 - 8;
+    const resetY = topY + h - resetH / 2 - 8;
+    const resetBtn = makeButton(this.scene, resetX, resetY, {
+      shape: 'rect',
+      w: resetW,
+      h: resetH,
+      hoverScale: 1.06,
+      pressScale: 0.94,
+      onClick: () => {
+        audio.play('click');
+        sessionStats.reset();
+      },
+    });
+    const rg = this.scene.add.graphics();
+    rg.fillStyle(0x222238, 1);
+    rg.fillRoundedRect(-resetW / 2, -resetH / 2, resetW, resetH, resetH / 2);
+    rg.lineStyle(1, 0xff6677, 0.9);
+    rg.strokeRoundedRect(-resetW / 2, -resetH / 2, resetW, resetH, resetH / 2);
+    resetBtn.add(rg);
+    const rt = this.scene.add
+      .text(0, 0, 'RESET', {
+        fontFamily: '"Arial Black", Arial, sans-serif',
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: '#ff6677',
+      })
+      .setOrigin(0.5);
+    resetBtn.add(rt);
+    parent.add(resetBtn);
   }
 
   /** Read current SFX volume from AudioManager via its persisted prefs. */

@@ -18,9 +18,10 @@ import { evaluate, totalWin, countScatters, freeSpinsAwarded, type WinLine } fro
 import { Balance } from '../systems/Balance';
 import { WinFx } from '../ui/WinFx';
 import { audio } from '../systems/AudioManager';
-import { settings } from '../systems/Settings';
+import { settings, sessionStats } from '../systems/Settings';
 import { SettingsModal } from '../ui/SettingsModal';
 import { SpinHistory, type SpinTier } from '../ui/SpinHistory';
+import { BuyBonusModal } from '../ui/BuyBonusModal';
 
 const NUM_REELS = 5;
 const VISIBLE_ROWS = 3;
@@ -87,6 +88,11 @@ export class MainScene extends Phaser.Scene {
   private freeSpinBadge?: Phaser.GameObjects.Container;
   private freeSpinBadgeText?: Phaser.GameObjects.Text;
   private freeSpinTimer?: Phaser.Time.TimerEvent;
+
+  // Mystery multiplier — set per spin, reset after evaluation. Stacks with
+  // free-spin multiplier when both apply.
+  private mysteryMultiplier = 1;
+  private buyBonus?: BuyBonusModal;
 
   private resizeTimer?: Phaser.Time.TimerEvent;
 
@@ -321,6 +327,16 @@ export class MainScene extends Phaser.Scene {
     // Spin history — top-LEFT pill mirroring the gear placement.
     this.spinHistory = new SpinHistory(this, settingsOffset + 50, settingsOffset);
 
+    // Buy Bonus — top, left of the gear, mirrors the layout language.
+    const buyBonusX = L.w - settingsOffset - 32 - 60;
+    this.buyBonus = new BuyBonusModal(this, buyBonusX, settingsOffset, {
+      getTotalBet: () => this.betPerLine * this.activeLines,
+      getBalance: () => this.balance,
+      isBusy: () => this.spinning || this.freeSpinsRemaining > 0 || this.autoSpin.isAutoActive(),
+      onConfirm: (cost, freeSpins) => this.purchaseFreeSpins(cost, freeSpins),
+    });
+    this.refreshBuyBonusEnabled();
+
     const creditCenter = this.hud.panelCenter('CREDIT') ?? { x: L.w / 2, y: L.h - 60 };
     this.winFx = new WinFx(
       this,
@@ -551,7 +567,14 @@ export class MainScene extends Phaser.Scene {
       Balance.deduct(totalBet);
       this.balance = Balance.getBalance();
       this.hud.countTo('CREDIT', this.balance, 400);
+      // Mystery multiplier rolls only on PAID spins. Reveal banner before reels stop.
+      this.mysteryMultiplier = this.rollMystery();
+      if (this.mysteryMultiplier > 1) {
+        this.showMysteryBanner(this.mysteryMultiplier);
+      }
     }
+
+    this.refreshBuyBonusEnabled();
 
     this.lastWin = 0;
     this.hud.setValue('WIN', 0);
@@ -593,7 +616,7 @@ export class MainScene extends Phaser.Scene {
     const result: string[][] = this.reels.map((r) => r.getVisibleSymbols());
     const rawWins: WinLine[] = evaluate(result, [...PAYLINES], this.activeLines, this.betPerLine);
     const isFreeSpin = this.freeSpinsRemaining > 0;
-    const multiplier = isFreeSpin ? this.FREE_SPIN_MULTIPLIER : 1;
+    const multiplier = (isFreeSpin ? this.FREE_SPIN_MULTIPLIER : 1) * this.mysteryMultiplier;
     const wins: WinLine[] =
       multiplier === 1
         ? rawWins
@@ -642,6 +665,13 @@ export class MainScene extends Phaser.Scene {
 
     this.spinHistory?.record(tier);
 
+    // Session stats — only count paid spins towards wagered, but credit
+    // every win (paid + free-spin wins) towards "won this session".
+    sessionStats.record(isFreeSpin ? 0 : totalBet, winSum);
+
+    // Mystery is one-shot per spin — clear before next.
+    this.mysteryMultiplier = 1;
+
     // Scatter / free-spin trigger.
     const scatters = countScatters(result);
     const awarded = freeSpinsAwarded(scatters);
@@ -657,6 +687,7 @@ export class MainScene extends Phaser.Scene {
       this.autoSpin.onSpinComplete();
     }
 
+    this.refreshBuyBonusEnabled();
     this.paylinePanel.showPreview(this.activeLines);
   }
 
@@ -692,14 +723,143 @@ export class MainScene extends Phaser.Scene {
     const wasFreeSpin = this.freeSpinsRemaining > 0;
     this.freeSpinsRemaining += awarded;
     this.freeSpinsTotal += awarded;
-    if (!wasFreeSpin) this.freeSpinsWinSoFar = 0;
+    if (!wasFreeSpin) {
+      this.freeSpinsWinSoFar = 0;
+      sessionStats.recordFreeSpinsTrigger();
+    }
     this.autoSpin.stop();
     audio.play('win-big');
     this.showFreeSpinBadge();
     this.updateFreeSpinBadge();
+    this.refreshBuyBonusEnabled();
     this.winFx.playFreeSpinsTrigger(scatters, awarded, () => {
       this.freeSpinTimer = this.time.delayedCall(450, () => this.runFreeSpinLoop());
     });
+  }
+
+  /** Player-purchased free spins. Skip the scatter trigger animation. */
+  private purchaseFreeSpins(cost: number, awarded: number): void {
+    if (this.spinning || this.freeSpinsRemaining > 0) return;
+    if (this.balance < cost) {
+      this.indicateInsufficient();
+      return;
+    }
+    Balance.deduct(cost);
+    this.balance = Balance.getBalance();
+    this.hud.countTo('CREDIT', this.balance, 400);
+    this.freeSpinsRemaining = awarded;
+    this.freeSpinsTotal = awarded;
+    this.freeSpinsWinSoFar = 0;
+    sessionStats.recordFreeSpinsTrigger();
+    this.autoSpin.stop();
+    this.showFreeSpinBadge();
+    this.updateFreeSpinBadge();
+    this.refreshBuyBonusEnabled();
+    // Brief celebratory banner, then drop straight into spinning.
+    audio.play('win-big');
+    this.flashBuyBonusBanner(awarded);
+    this.freeSpinTimer = this.time.delayedCall(900, () => this.runFreeSpinLoop());
+  }
+
+  private flashBuyBonusBanner(awarded: number): void {
+    const W = this.scale.width;
+    const y = this.blockY + 30;
+    const bannerW = 280;
+    const bannerH = 56;
+    const c = this.add.container(W / 2, y);
+    c.setDepth(260);
+    const g = this.add.graphics();
+    g.fillStyle(0x002233, 0.95);
+    g.fillRoundedRect(-bannerW / 2, -bannerH / 2, bannerW, bannerH, 14);
+    g.lineStyle(2.5, 0x44eaff, 1);
+    g.strokeRoundedRect(-bannerW / 2, -bannerH / 2, bannerW, bannerH, 14);
+    c.add(g);
+    const t = this.add
+      .text(0, 0, `BONUS PURCHASED\n${awarded} FREE SPINS`, {
+        fontFamily: '"Arial Black", Arial, sans-serif',
+        fontSize: '17px',
+        fontStyle: 'bold',
+        color: '#44eaff',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+    t.setShadow(0, 0, '#44eaff', 10, false, true);
+    c.add(t);
+    c.setAlpha(0);
+    c.setScale(0.6);
+    this.tweens.add({ targets: c, alpha: 1, scale: 1, duration: 240, ease: 'Back.Out' });
+    this.tweens.add({
+      targets: c,
+      alpha: 0,
+      y: y - 30,
+      duration: 360,
+      delay: 1100,
+      ease: 'Sine.In',
+      onComplete: () => c.destroy(),
+    });
+  }
+
+  // ---------- mystery multiplier ----------
+
+  /** ~1.5% per paid spin, weighted 60% / 30% / 10% across 2× / 3× / 5×. */
+  private rollMystery(): number {
+    if (rng.rollInt(1, 1000) > 15) return 1;
+    const r = rng.rollInt(1, 100);
+    if (r <= 60) return 2;
+    if (r <= 90) return 3;
+    return 5;
+  }
+
+  private showMysteryBanner(mult: number): void {
+    const W = this.scale.width;
+    const y = this.blockY + 36;
+    const bannerW = 240;
+    const bannerH = 50;
+    const c = this.add.container(W / 2, y);
+    c.setDepth(260);
+    const tint = mult >= 5 ? 0xff3355 : mult >= 3 ? 0xff8a3a : 0xffd700;
+    const g = this.add.graphics();
+    g.fillStyle(0x140014, 0.92);
+    g.fillRoundedRect(-bannerW / 2, -bannerH / 2, bannerW, bannerH, 12);
+    g.lineStyle(2.5, tint, 1);
+    g.strokeRoundedRect(-bannerW / 2, -bannerH / 2, bannerW, bannerH, 12);
+    c.add(g);
+    const t = this.add
+      .text(0, 0, `MYSTERY  ×${mult}`, {
+        fontFamily: '"Impact", "Arial Black", sans-serif',
+        fontSize: '26px',
+        fontStyle: 'bold',
+        color: `#${tint.toString(16).padStart(6, '0')}`,
+      })
+      .setOrigin(0.5);
+    t.setShadow(0, 0, `#${tint.toString(16).padStart(6, '0')}`, 14, false, true);
+    c.add(t);
+    c.setAlpha(0);
+    c.setScale(0.4);
+    this.tweens.add({ targets: c, alpha: 1, scale: 1.05, duration: 260, ease: 'Back.Out' });
+    this.tweens.add({
+      targets: c,
+      scale: 1,
+      duration: 200,
+      delay: 260,
+      ease: 'Sine.Out',
+    });
+    this.tweens.add({
+      targets: c,
+      alpha: 0,
+      y: y - 24,
+      duration: 360,
+      delay: 1500,
+      ease: 'Sine.In',
+      onComplete: () => c.destroy(),
+    });
+    audio.play('win-medium');
+  }
+
+  private refreshBuyBonusEnabled(): void {
+    if (!this.buyBonus) return;
+    const busy = this.spinning || this.freeSpinsRemaining > 0 || this.autoSpin?.isAutoActive();
+    this.buyBonus.setEnabled(!busy);
   }
 
   private advanceFreeSpins(): void {

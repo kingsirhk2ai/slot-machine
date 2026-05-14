@@ -60,3 +60,54 @@ class SettingsImpl {
 }
 
 export const settings = new SettingsImpl();
+
+/**
+ * In-memory session counters. Reset on page reload — these intentionally
+ * do NOT persist, so each session feels fresh. Useful for "how am I doing
+ * this session?" feedback in the Settings drawer.
+ */
+class SessionStatsImpl {
+  spins = 0;
+  wagered = 0;
+  won = 0;
+  bestWin = 0;
+  freeSpinsTriggered = 0;
+  private listeners: Set<Listener> = new Set();
+
+  record(bet: number, win: number): void {
+    this.spins++;
+    this.wagered += bet;
+    this.won += win;
+    if (win > this.bestWin) this.bestWin = win;
+    this.notify();
+  }
+
+  recordFreeSpinsTrigger(): void {
+    this.freeSpinsTriggered++;
+    this.notify();
+  }
+
+  reset(): void {
+    this.spins = 0;
+    this.wagered = 0;
+    this.won = 0;
+    this.bestWin = 0;
+    this.freeSpinsTriggered = 0;
+    this.notify();
+  }
+
+  net(): number {
+    return this.won - this.wagered;
+  }
+
+  onChange(fn: Listener): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  private notify(): void {
+    for (const fn of this.listeners) fn();
+  }
+}
+
+export const sessionStats = new SessionStatsImpl();
