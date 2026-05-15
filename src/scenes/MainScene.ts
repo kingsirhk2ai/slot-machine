@@ -29,6 +29,7 @@ import { RefillModal } from '../ui/RefillModal';
 import { GambleModal } from '../ui/GambleModal';
 import { StreakChip } from '../ui/StreakChip';
 import { AchievementToastQueue } from '../ui/AchievementToast';
+import { DailyRewardModal } from '../ui/DailyRewardModal';
 
 const NUM_REELS = 5;
 const VISIBLE_ROWS = 3;
@@ -135,6 +136,24 @@ export class MainScene extends Phaser.Scene {
       audio.play('win-medium');
       haptics.success();
     });
+
+    // Daily login reward — pop after a short delay so the cabinet finishes
+    // its entrance before the modal lands. Skip on scene restart (e.g.
+    // language change) so the player isn't asked twice in one session.
+    if (!(window as any).__DAILY_REWARD_SHOWN__) {
+      (window as any).__DAILY_REWARD_SHOWN__ = true;
+      this.time.delayedCall(600, () => {
+        const modal = new DailyRewardModal(this, {
+          onClaimed: (amount) => {
+            this.balance = Balance.getBalance();
+            this.hud.countTo('CREDIT', this.balance, 600);
+            this.hud.pulsePanel('CREDIT');
+            this.winFx.coinBurst(Math.min(40, Math.floor(amount / 50)));
+          },
+        });
+        modal.openIfAvailable();
+      });
+    }
 
     this.events.once('shutdown', () => {
       this.scale.off('resize', this.onResize, this);

@@ -86,6 +86,16 @@ export const zhHK: Record<StringKey, string> = {
   'gamble-win': '+{n}  中獎!',
   'gamble-bust': '輸晒',
 
+  // Daily reward
+  'daily-reward': '每日獎勵',
+  'daily-reward-sub': '連續登入賺取更多!',
+  'claim': '領取',
+  'claim-amount': '+{n}',
+  'come-back-tomorrow': '聽日再嚟攞下一個獎勵!',
+  'streak-day': '第 {n} 日',
+  'streak-broken': '連勝中斷  重新由第 1 日開始',
+  'streak-current': '連續登入 {n} 日',
+
   // Achievements
   'achievements': '成就',
   'achievement-unlocked': '解鎖成就!',

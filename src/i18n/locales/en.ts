@@ -85,6 +85,16 @@ export const en = {
   'gamble-win': '+{n}  WIN!',
   'gamble-bust': 'BUST',
 
+  // Daily reward
+  'daily-reward': 'DAILY REWARD',
+  'daily-reward-sub': 'Log in daily to earn more!',
+  'claim': 'CLAIM',
+  'claim-amount': '+{n}',
+  'come-back-tomorrow': 'Come back tomorrow for the next reward!',
+  'streak-day': 'Day {n}',
+  'streak-broken': 'Streak reset — starting from Day 1',
+  'streak-current': 'Streak: {n} days',
+
   // Achievements
   'achievements': 'ACHIEVEMENTS',
   'achievement-unlocked': 'ACHIEVEMENT UNLOCKED!',
